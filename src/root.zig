@@ -65,7 +65,41 @@ pub fn processFiles(allocator: std.mem.Allocator, md_files: []string) !void {
     }
 }
 
+const base =
+    \\<doctype html>
+    \\<head>
+    \\</head>
+    \\<body>
+;
+
+const footer =
+    \\</body>
+    \\</html>
+;
+
 fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
     std.debug.print("Processing file: {s}\n", .{md_file});
-    _ = allocator;
+    const file = try std.fs.openFileAbsolute(md_file, .{});
+    defer file.close();
+    const contents = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    std.debug.print("Contents: {s}\n", .{contents});
+
+    var headers = std.ArrayList(string).init(allocator);
+    defer headers.deinit();
+
+    var lines = std.mem.splitScalar(u8, contents, '\n');
+    while (lines.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t");
+        if (std.mem.startsWith(u8, trimmed, "#")) {
+            const cleaned_header = std.mem.trim(u8, trimmed, "# \t");
+            try headers.append(cleaned_header);
+        }
+    }
+
+    const filename = std.fs.path.basename(md_file);
+    const ext = std.fs.path.extension(filename);
+    const filename_without_ext = filename[0 .. filename.len - ext.len];
+    const html_filename = try std.fmt.allocPrint(allocator, "{s}.html", .{filename_without_ext});
+    defer allocator.free(html_filename);
+    std.debug.print("Filename: {s}\n", .{html_filename});
 }
