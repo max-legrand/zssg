@@ -16,12 +16,13 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     try zlog.initGlobalLogger(.INFO, true, null, null, null, allocator);
-    defer zlog.deinitGlobalLogger();
 
     zlog.info("ZSSG v{d}.{d}.{d}", .{ major, minor, patch });
 
     const dir = try zssg.findMdDir(allocator);
     zlog.info("Found md dir: {s}", .{dir});
+
+    try zssg.moveAssets(allocator, dir);
 
     const md_files = try zssg.findMdFiles(allocator, dir);
     try zssg.processFiles(allocator, md_files);

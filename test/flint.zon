@@ -1,0 +1,29 @@
+.{
+    .tasks = .{
+        .{
+            .name = "generate",
+            .cmd = "../zig-out/bin/zssg",
+            .watcher = .{"md/*.md"},
+            .deps = .{
+                "clean",
+                "build",
+            },
+        },
+        .{
+            .name = "build",
+            .cmd = "cd .. && zig build",
+        },
+        .{
+            .name = "clean",
+            .cmd = "rm -rf html",
+        },
+        .{
+            .name = "run",
+            .cmd = "cd html && python3 -m http.server",
+            .watcher = .{"md/*.md"},
+            .deps = .{
+                "generate",
+            },
+        },
+    },
+}
