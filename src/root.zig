@@ -164,11 +164,21 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
 
         if (trimmed.len > 0 and trimmed[0] == '<') {
             if (extractTagName(trimmed)) |tag| {
-                in_html_block = true;
-                html_tag = tag;
-                try new_file.writeAll(line);
-                try new_file.writeAll("\n");
-                continue;
+                const close_tag = try std.fmt.allocPrint(allocator, "</{s}>", .{tag});
+                defer allocator.free(close_tag);
+                if (std.mem.indexOf(u8, trimmed, close_tag) != null) {
+                    // Opening and closing tag on the same line: just write it, don't enter passthrough
+                    try new_file.writeAll(line);
+                    try new_file.writeAll("\n");
+                    continue;
+                } else {
+                    // Multi-line HTML block
+                    in_html_block = true;
+                    html_tag = tag;
+                    try new_file.writeAll(line);
+                    try new_file.writeAll("\n");
+                    continue;
+                }
             }
         }
 
