@@ -199,3 +199,12 @@ footer, .footer {
     opacity: 0.8;
     width: 100%;
 }
+
+.myclass {
+    align-self: center;
+}
+
+.span {
+    font-weight: bold;
+    font-family: "Roboto", sans-serif;
+}

@@ -40,8 +40,8 @@ pub fn processFiles(allocator: std.mem.Allocator, md_files: []string) !void {
 
 const Frontmatter = struct {
     title: ?string,
-    stylesheet: ?string = null,
-    js: ?string = null,
+    stylesheets: ?std.ArrayList(string) = null,
+    scripts: ?std.ArrayList(string) = null,
 };
 
 fn writeBase(allocator: std.mem.Allocator, file: *std.fs.File, frontmatter: Frontmatter) !void {
@@ -52,15 +52,19 @@ fn writeBase(allocator: std.mem.Allocator, file: *std.fs.File, frontmatter: Fron
         var empty_string: ?string = null;
         try writeTag(allocator, file.*, "title", title, &empty_string);
     }
-    if (frontmatter.stylesheet) |stylesheet| {
-        try file.writeAll("<link rel=\"stylesheet\" href=\"");
-        try file.writeAll(stylesheet);
-        try file.writeAll("\">\n");
+    if (frontmatter.stylesheets) |stylesheets| {
+        for (stylesheets.items) |stylesheet| {
+            try file.writeAll("<link rel=\"stylesheet\" href=\"");
+            try file.writeAll(stylesheet);
+            try file.writeAll("\">\n");
+        }
     }
-    if (frontmatter.js) |js| {
-        try file.writeAll("<script src=\"");
-        try file.writeAll(js);
-        try file.writeAll("\"></script>\n");
+    if (frontmatter.scripts) |scripts| {
+        for (scripts.items) |script| {
+            try file.writeAll("<script src=\"");
+            try file.writeAll(script);
+            try file.writeAll("\"></script>\n");
+        }
     }
 
     try file.writeAll("</head>\n<body>\n");
@@ -79,6 +83,14 @@ fn isIdLine(line: string) bool {
 
 fn extractId(line: string) string {
     return line[2 .. line.len - 1];
+}
+
+fn extractTagName(line: []const u8) ?[]const u8 {
+    if (line.len < 2 or line[0] != '<' or line[1] == '/') return null;
+    var i: usize = 1;
+    while (i < line.len and std.ascii.isAlphabetic(line[i])) : (i += 1) {}
+    if (i > 1) return line[1..i];
+    return null;
 }
 
 fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
@@ -123,6 +135,9 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
 
     var pending_id: ?string = null;
 
+    var in_html_block = false;
+    var html_tag: ?[]const u8 = null;
+
     while (lines.next()) |line| {
         const indent = utils.getIndentLevel(line, 2);
         var trimmed = std.mem.trim(u8, line, " \t");
@@ -132,8 +147,45 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
             continue;
         }
 
+        if (in_html_block) {
+            try new_file.writeAll(line);
+            try new_file.writeAll("\n");
+            if (html_tag) |tag| {
+                // Check for closing tag, e.g. </div>
+                const close_tag = try std.fmt.allocPrint(allocator, "</{s}>", .{tag});
+                defer allocator.free(close_tag);
+                if (std.mem.indexOf(u8, trimmed, close_tag) != null) {
+                    in_html_block = false;
+                    html_tag = null;
+                }
+            }
+            continue;
+        }
+
+        if (trimmed.len > 0 and trimmed[0] == '<') {
+            if (extractTagName(trimmed)) |tag| {
+                in_html_block = true;
+                html_tag = tag;
+                try new_file.writeAll(line);
+                try new_file.writeAll("\n");
+                continue;
+            }
+        }
+
+        // Start of HTML block
+        if (trimmed.len > 0 and trimmed[0] == '<') {
+            in_html_block = true;
+            try new_file.writeAll(line);
+            try new_file.writeAll("\n");
+            continue;
+        }
+
         if (std.mem.eql(u8, trimmed, "---") and line_idx == 0) {
-            var frontmatter = Frontmatter{ .title = null, .stylesheet = null };
+            var frontmatter = Frontmatter{
+                .title = null,
+                .stylesheets = std.ArrayList(string).init(allocator),
+                .scripts = std.ArrayList(string).init(allocator),
+            };
             while (lines.peek()) |next_line| {
                 _ = lines.next();
                 if (std.mem.eql(u8, next_line, "---")) {
@@ -159,7 +211,7 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
                         if (!(std.mem.startsWith(u8, stylesheet, "http://") or std.mem.startsWith(u8, stylesheet, "https://"))) {
                             stylesheet = try std.fmt.allocPrint(allocator, "/{s}", .{stylesheet});
                         }
-                        frontmatter.stylesheet = try utils.htmlEscape(allocator, stylesheet);
+                        try frontmatter.stylesheets.?.append(try utils.htmlEscape(allocator, stylesheet));
                     } else if (std.mem.startsWith(u8, next_line, "js: ")) {
                         var js = next_line[4..];
                         if (js[0] == '"' and js[js.len - 1] == '"') {
@@ -170,7 +222,7 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
                         if (!(std.mem.startsWith(u8, js, "http://") or std.mem.startsWith(u8, js, "https://"))) {
                             js = try std.fmt.allocPrint(allocator, "/{s}", .{js});
                         }
-                        frontmatter.js = try utils.htmlEscape(allocator, js);
+                        try frontmatter.scripts.?.append(try utils.htmlEscape(allocator, js));
                     }
                     line_idx += 1;
                 }
@@ -178,7 +230,7 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
             try writeBase(allocator, &new_file, frontmatter);
             continue;
         } else if (line_idx == 0) {
-            try writeBase(allocator, &new_file, .{ .stylesheet = null, .title = null });
+            try writeBase(allocator, &new_file, .{ .title = null });
             line_idx += 1;
         }
 

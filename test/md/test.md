@@ -1,6 +1,7 @@
 ---
 title: "ZSSG test"
 stylesheet: "style.css"
+stylesheet: "https://fonts.googleapis.com/css2?family=Roboto"
 js: "script.js"
 ---
 
@@ -60,3 +61,7 @@ This is a nested list
 
 Image of the Zig logo
 ![zig logo](https://ziglang.org/zig-logo-light.svg)
+
+<div class="myclass">
+    <span class="span"> Custom HTML </span>
+</div>
