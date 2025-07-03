@@ -30,3 +30,5 @@ python3 -m http.server
 ```
 
 You can then view the example at [http://localhost:8000/test](http://localhost:8000/test).
+
+![Example image](imgs/example.png)
