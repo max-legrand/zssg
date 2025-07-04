@@ -47,7 +47,7 @@ const Frontmatter = struct {
 fn writeBase(allocator: std.mem.Allocator, file: *std.fs.File, frontmatter: Frontmatter) !void {
     try file.writeAll("<!DOCTYPE html>\n");
     try file.writeAll("<html>\n");
-    try file.writeAll("<head>\n");
+    try file.writeAll("<head>\n<meta charset=\"UTF-8\">\n");
     if (frontmatter.title) |title| {
         var empty_string: ?string = null;
         try writeTag(allocator, file.*, "title", title, &empty_string);
