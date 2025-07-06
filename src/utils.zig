@@ -74,7 +74,7 @@ pub fn moveAssets(allocator: std.mem.Allocator, md_dir: string) !void {
             std.mem.eql(u8, ext, ".jpeg") or
             std.mem.eql(u8, ext, ".gif"))
         {
-            const dest_path = try std.fs.path.join(allocator, &.{ "html", filename });
+            const dest_path = try std.fs.path.join(allocator, &.{ cwd_path, "html", filename });
             if (std.fs.path.dirname(dest_path)) |dest_dir| {
                 cwd.makePath(dest_dir) catch |err| switch (err) {
                     error.PathAlreadyExists => {},
@@ -84,7 +84,7 @@ pub fn moveAssets(allocator: std.mem.Allocator, md_dir: string) !void {
 
             const src_path = try dir.realpathAlloc(allocator, filename);
 
-            _ = std.fs.createFileAbsolute(src_path, .{}) catch |err| {
+            _ = std.fs.createFileAbsolute(dest_path, .{}) catch |err| {
                 switch (err) {
                     error.PathAlreadyExists => {},
                     else => return err,
