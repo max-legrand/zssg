@@ -60,8 +60,6 @@ pub fn moveAssets(allocator: std.mem.Allocator, md_dir: string) !void {
     var walker = try dir.walk(allocator);
     defer walker.deinit();
 
-    var assets = std.ArrayList(string).init(allocator);
-
     while (try walker.next()) |entry| {
         if (entry.kind != .file) {
             continue;
@@ -76,21 +74,24 @@ pub fn moveAssets(allocator: std.mem.Allocator, md_dir: string) !void {
             std.mem.eql(u8, ext, ".jpeg") or
             std.mem.eql(u8, ext, ".gif"))
         {
-            const path = try dir.realpathAlloc(allocator, filename);
-            try assets.append(path);
-        }
-    }
-
-    for (assets.items) |asset| {
-        const filename = std.fs.path.basename(asset);
-        _ = output_dir.createFile(filename, .{}) catch |err| {
-            switch (err) {
-                error.PathAlreadyExists => {},
-                else => return err,
+            const dest_path = try std.fs.path.join(allocator, &.{ "html", filename });
+            if (std.fs.path.dirname(dest_path)) |dest_dir| {
+                cwd.makePath(dest_dir) catch |err| switch (err) {
+                    error.PathAlreadyExists => {},
+                    else => return err,
+                };
             }
-        };
-        const filepath = try output_dir.realpathAlloc(allocator, filename);
-        try std.fs.copyFileAbsolute(asset, filepath, .{});
+
+            const src_path = try dir.realpathAlloc(allocator, filename);
+
+            _ = std.fs.createFileAbsolute(src_path, .{}) catch |err| {
+                switch (err) {
+                    error.PathAlreadyExists => {},
+                    else => return err,
+                }
+            };
+            try std.fs.copyFileAbsolute(src_path, dest_path, .{});
+        }
     }
 }
 
@@ -142,7 +143,7 @@ pub fn htmlEscape(allocator: std.mem.Allocator, content: string) !string {
     return output.toOwnedSlice();
 }
 
-fn parseInline(allocator: std.mem.Allocator, line: string) !string {
+fn parseInline(allocator: std.mem.Allocator, line: []const u8) ![]const u8 {
     var output = std.ArrayList(u8).init(allocator);
 
     var inBold: ?u8 = null;
@@ -162,35 +163,112 @@ fn parseInline(allocator: std.mem.Allocator, line: string) !string {
             continue;
         }
 
-        // Inline link: [text](url){noblank}
-        if (current == '[') {
-            // Find closing ']'
+        // Inline image: ![alt](url "title"){#id}
+        if (current == '!' and idx + 1 < line.len and line[idx + 1] == '[') {
+            idx += 1;
             const close_bracket = std.mem.indexOf(u8, line[idx..], "]");
             if (close_bracket) |cb| {
                 const after_bracket = idx + cb + 1;
                 if (after_bracket < line.len and line[after_bracket] == '(') {
-                    // Find closing ')'
+                    const close_paren = std.mem.indexOf(u8, line[after_bracket..], ")");
+                    if (close_paren) |p| {
+                        const alt = line[idx + 1 .. idx + cb];
+                        const url_and_title = line[after_bracket + 1 .. after_bracket + p];
+
+                        // Split url and optional title
+                        var url: []const u8 = url_and_title;
+                        var title: []const u8 = "";
+                        if (std.mem.indexOf(u8, url_and_title, "\"")) |quote_idx| {
+                            url = std.mem.trimRight(u8, url_and_title[0..quote_idx], " ");
+                            title = std.mem.trim(u8, url_and_title[quote_idx..], "\" ");
+                        }
+
+                        idx = after_bracket + p + 1;
+
+                        var id: ?[]const u8 = null;
+                        while (true) {
+                            while (idx < line.len and (line[idx] == ' ' or line[idx] == '\t')) : (idx += 1) {}
+                            if (idx < line.len and line[idx] == '{') {
+                                const close_brace = std.mem.indexOf(u8, line[idx..], "}");
+                                if (close_brace) |brace| {
+                                    const block = line[idx + 1 .. idx + brace];
+                                    if (block.len > 1 and block[0] == '#') {
+                                        id = block[1..];
+                                    }
+                                    idx = idx + brace + 1;
+                                    continue;
+                                }
+                            }
+                            break;
+                        }
+
+                        try output.appendSlice("<img src=\"");
+                        try output.appendSlice(url);
+                        try output.appendSlice("\" alt=\"");
+                        try output.appendSlice(alt);
+                        try output.appendSlice("\"");
+                        if (title.len > 0) {
+                            try output.appendSlice(" title=\"");
+                            try output.appendSlice(title);
+                            try output.appendSlice("\"");
+                        }
+                        if (id) |id_val| {
+                            try output.appendSlice(" id=\"");
+                            try output.appendSlice(id_val);
+                            try output.appendSlice("\"");
+                        }
+                        try output.appendSlice("/>");
+                        continue;
+                    }
+                }
+            }
+            // If not a valid image, just output the '!' and continue
+            try output.append('!');
+            continue;
+        }
+
+        // Inline link: [text](url){noblank}{#id}
+        if (current == '[') {
+            const close_bracket = std.mem.indexOf(u8, line[idx..], "]");
+            if (close_bracket) |cb| {
+                const after_bracket = idx + cb + 1;
+                if (after_bracket < line.len and line[after_bracket] == '(') {
                     const close_paren = std.mem.indexOf(u8, line[after_bracket..], ")");
                     if (close_paren) |p| {
                         const text = line[idx + 1 .. idx + cb];
                         const url = line[after_bracket + 1 .. after_bracket + p];
 
-                        // Advance idx to after ')'
                         idx = after_bracket + p + 1;
 
-                        // Skip whitespace after ')'
-                        while (idx < line.len and (line[idx] == ' ' or line[idx] == '\t')) : (idx += 1) {}
-
-                        // Check for {noblank}
                         var no_blank = false;
-                        if (idx + 9 <= line.len and std.mem.eql(u8, line[idx .. idx + 9], "{noblank}")) {
-                            no_blank = true;
-                            idx += 9;
+                        var id: ?[]const u8 = null;
+                        while (true) {
+                            while (idx < line.len and (line[idx] == ' ' or line[idx] == '\t')) : (idx += 1) {}
+                            if (idx < line.len and line[idx] == '{') {
+                                const close_brace = std.mem.indexOf(u8, line[idx..], "}");
+                                if (close_brace) |brace| {
+                                    const block = line[idx + 1 .. idx + brace];
+                                    if (std.mem.eql(u8, block, "noblank")) {
+                                        no_blank = true;
+                                    } else if (block.len > 1 and block[0] == '#') {
+                                        id = block[1..];
+                                    }
+                                    idx = idx + brace + 1;
+                                    continue;
+                                }
+                            }
+                            break;
                         }
+                        // --- END ---
 
                         try output.appendSlice("<a href=\"");
                         try output.appendSlice(url);
                         try output.appendSlice("\"");
+                        if (id) |id_val| {
+                            try output.appendSlice(" id=\"");
+                            try output.appendSlice(id_val);
+                            try output.appendSlice("\"");
+                        }
                         if (!no_blank) {
                             try output.appendSlice(" target=\"_blank\"");
                         }
@@ -204,44 +282,6 @@ fn parseInline(allocator: std.mem.Allocator, line: string) !string {
             // If not a valid link, just output the '[' and continue
             try output.append('[');
             idx += 1;
-            continue;
-        }
-
-        // Inline image: ![alt](url "title")
-        if (current == '!' and idx + 1 < line.len and line[idx + 1] == '[') {
-            idx += 1;
-            const close_bracket = std.mem.indexOf(u8, line[idx..], "]");
-            if (close_bracket) |cb| {
-                const after_bracket = idx + cb + 1;
-                if (after_bracket < line.len and line[after_bracket] == '(') {
-                    const close_paren = std.mem.indexOf(u8, line[after_bracket..], ")");
-                    if (close_paren) |p| {
-                        const alt = line[idx + 1 .. idx + cb];
-                        const url_and_title = line[after_bracket + 1 .. after_bracket + p];
-                        var url_items = std.mem.splitScalar(u8, url_and_title, ' ');
-                        var url: string = "";
-                        var title: string = "";
-                        if (url_items.next()) |item| url = item;
-                        if (url_items.next()) |item| title = std.mem.trim(u8, item, "\"");
-
-                        try output.appendSlice("<img src=\"");
-                        try output.appendSlice(url);
-                        try output.appendSlice("\" alt=\"");
-                        try output.appendSlice(alt);
-                        try output.appendSlice("\"");
-                        if (title.len > 0) {
-                            try output.appendSlice(" title=\"");
-                            try output.appendSlice(title);
-                            try output.appendSlice("\"");
-                        }
-                        try output.appendSlice("/>");
-                        idx = after_bracket + p + 1;
-                        continue;
-                    }
-                }
-            }
-            // If not a valid image, just output the '!' and continue
-            try output.append('!');
             continue;
         }
 
