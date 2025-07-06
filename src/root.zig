@@ -163,6 +163,7 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
     var in_html_block = false;
     var html_tag: ?[]const u8 = null;
 
+    var paragraph_buffer = std.ArrayList(string).init(allocator);
     while (lines.next()) |line| {
         const indent = utils.getIndentLevel(line, 2);
         var trimmed = std.mem.trim(u8, line, " \t");
@@ -298,6 +299,12 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
         }
 
         if (line.len == 0) {
+            if (paragraph_buffer.items.len > 0) {
+                const value = try std.mem.join(allocator, " ", paragraph_buffer.items);
+                try writeTag(allocator, new_file, "p", value, &pending_id);
+                paragraph_buffer.clearRetainingCapacity();
+            }
+
             if (inBlockQuote) {
                 inBlockQuote = false;
                 try new_file.writeAll("</blockquote>\n");
@@ -501,7 +508,8 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
             try writeTag(allocator, new_file, "h3", cleaned, &pending_id);
         } else if (std.mem.eql(u8, prefix, "")) {
             const cleaned = try utils.htmlEscape(allocator, trimmed);
-            try writeTag(allocator, new_file, "p", cleaned, &pending_id);
+            // try writeTag(allocator, new_file, "p", cleaned, &pending_id);
+            try paragraph_buffer.append(cleaned);
         } else {
             std.debug.print("Unknown prefix: {s}\n", .{prefix});
         }
@@ -512,6 +520,12 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
         if (last) |entry| {
             try new_file.writeAll(if (entry.list_type == .ul) "</ul>\n" else "</ol>\n");
         }
+    }
+
+    if (paragraph_buffer.items.len > 0) {
+        const value = try std.mem.join(allocator, " ", paragraph_buffer.items);
+        try writeTag(allocator, new_file, "p", value, &pending_id);
+        paragraph_buffer.clearRetainingCapacity();
     }
 
     try new_file.writeAll(footer);
