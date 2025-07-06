@@ -187,8 +187,10 @@ fn parseInline(allocator: std.mem.Allocator, line: []const u8) ![]const u8 {
 
                         var id: ?[]const u8 = null;
                         while (true) {
-                            while (idx < line.len and (line[idx] == ' ' or line[idx] == '\t')) : (idx += 1) {}
-                            if (idx < line.len and line[idx] == '{') {
+                            var temp_idx = idx;
+                            while (temp_idx < line.len and (line[temp_idx] == ' ' or line[temp_idx] == '\t')) : (temp_idx += 1) {}
+                            if (temp_idx < line.len and line[temp_idx] == '{') {
+                                idx = temp_idx;
                                 const close_brace = std.mem.indexOf(u8, line[idx..], "}");
                                 if (close_brace) |brace| {
                                     const block = line[idx + 1 .. idx + brace];
@@ -243,8 +245,10 @@ fn parseInline(allocator: std.mem.Allocator, line: []const u8) ![]const u8 {
                         var no_blank = false;
                         var id: ?[]const u8 = null;
                         while (true) {
-                            while (idx < line.len and (line[idx] == ' ' or line[idx] == '\t')) : (idx += 1) {}
-                            if (idx < line.len and line[idx] == '{') {
+                            var temp_idx = idx;
+                            while (temp_idx < line.len and (line[temp_idx] == ' ' or line[temp_idx] == '\t')) : (temp_idx += 1) {}
+                            if (temp_idx < line.len and line[temp_idx] == '{') {
+                                idx = temp_idx;
                                 const close_brace = std.mem.indexOf(u8, line[idx..], "}");
                                 if (close_brace) |brace| {
                                     const block = line[idx + 1 .. idx + brace];
