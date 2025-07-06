@@ -150,120 +150,102 @@ fn parseInline(allocator: std.mem.Allocator, line: string) !string {
     var inCode = false;
 
     var idx: usize = 0;
-    while (idx < line.len - 1) {
+    while (idx < line.len) {
         const current = line[idx];
-        const next = line[idx + 1];
 
-        if (current == '\\' and (next == '*' or next == '_' or next == '`')) {
-            try output.append(next);
+        // Escaped formatting characters
+        if (current == '\\' and idx + 1 < line.len and
+            (line[idx + 1] == '*' or line[idx + 1] == '_' or line[idx + 1] == '`'))
+        {
+            try output.append(line[idx + 1]);
             idx += 2;
             continue;
         }
 
+        // Inline link: [text](url){noblank}
         if (current == '[') {
-            // find closing ']'
+            // Find closing ']'
             const close_bracket = std.mem.indexOf(u8, line[idx..], "]");
             if (close_bracket) |cb| {
-                if (cb + 1 < line.len and line[idx + cb + 1] == '(') {
-                    const text = line[idx + 1 .. idx + cb];
-                    const close_paren = std.mem.indexOf(u8, line[idx + cb + 1 ..], ")");
+                const after_bracket = idx + cb + 1;
+                if (after_bracket < line.len and line[after_bracket] == '(') {
+                    // Find closing ')'
+                    const close_paren = std.mem.indexOf(u8, line[after_bracket..], ")");
                     if (close_paren) |p| {
-                        const url = line[idx + cb + 2 .. idx + cb + 1 + p];
+                        const text = line[idx + 1 .. idx + cb];
+                        const url = line[after_bracket + 1 .. after_bracket + p];
+
+                        // Advance idx to after ')'
+                        idx = after_bracket + p + 1;
+
+                        // Skip whitespace after ')'
+                        while (idx < line.len and (line[idx] == ' ' or line[idx] == '\t')) : (idx += 1) {}
+
+                        // Check for {noblank}
+                        var no_blank = false;
+                        if (idx + 9 <= line.len and std.mem.eql(u8, line[idx .. idx + 9], "{noblank}")) {
+                            no_blank = true;
+                            idx += 9;
+                        }
 
                         try output.appendSlice("<a href=\"");
                         try output.appendSlice(url);
                         try output.appendSlice("\"");
-
-                        idx = idx + cb + 1 + p + 1;
-                        const blank_check = idx;
-                        const blank = blank_check + 9;
-                        if (blank < line.len and std.mem.eql(u8, line[blank_check..blank], "{noblank}")) {
-                            idx = blank;
-                        } else {
+                        if (!no_blank) {
                             try output.appendSlice(" target=\"_blank\"");
                         }
                         try output.appendSlice(">");
                         try output.appendSlice(text);
                         try output.appendSlice("</a>");
                         continue;
-                    } else {
-                        try output.appendSlice("<a href=\"\">");
-                        try output.appendSlice(text);
-                        try output.appendSlice("</a>");
-                        idx = idx + cb + 1;
-                        continue;
                     }
                 }
-            } else {
-                try output.appendSlice("[");
-                idx += 1;
-                continue;
             }
+            // If not a valid link, just output the '[' and continue
+            try output.append('[');
+            idx += 1;
+            continue;
         }
-        if (current == '!') {
-            // Check if the next character is a link
-            if (idx + 1 < line.len and line[idx + 1] == '[') {
-                idx += 1;
-                const close_bracket = std.mem.indexOf(u8, line[idx..], "]");
-                if (close_bracket) |cb| {
-                    if (cb + 1 < line.len and line[idx + cb + 1] == '(') {
-                        const text = line[idx + 1 .. idx + cb];
-                        const close_paren = std.mem.indexOf(u8, line[idx + cb + 1 ..], ")");
-                        if (close_paren) |p| {
-                            const url = line[idx + cb + 2 .. idx + cb + 1 + p];
-                            var url_items = std.mem.splitScalar(u8, url, ' ');
-                            var url_idx: usize = 0;
-                            var link_text: string = "";
-                            var title: string = "";
-                            while (url_items.next()) |item| {
-                                switch (url_idx) {
-                                    0 => {
-                                        link_text = item;
-                                        url_idx += 1;
-                                    },
-                                    1 => {
-                                        title = std.mem.trim(u8, item, "\"");
-                                        break;
-                                    },
-                                    else => {
-                                        break;
-                                    },
-                                }
-                            }
 
-                            try output.appendSlice("<img src=\"");
-                            try output.appendSlice(link_text);
-                            try output.appendSlice("\"");
-                            try output.appendSlice(" alt=\"");
-                            try output.appendSlice(text);
-                            try output.appendSlice("\"");
+        // Inline image: ![alt](url "title")
+        if (current == '!' and idx + 1 < line.len and line[idx + 1] == '[') {
+            idx += 1;
+            const close_bracket = std.mem.indexOf(u8, line[idx..], "]");
+            if (close_bracket) |cb| {
+                const after_bracket = idx + cb + 1;
+                if (after_bracket < line.len and line[after_bracket] == '(') {
+                    const close_paren = std.mem.indexOf(u8, line[after_bracket..], ")");
+                    if (close_paren) |p| {
+                        const alt = line[idx + 1 .. idx + cb];
+                        const url_and_title = line[after_bracket + 1 .. after_bracket + p];
+                        var url_items = std.mem.splitScalar(u8, url_and_title, ' ');
+                        var url: string = "";
+                        var title: string = "";
+                        if (url_items.next()) |item| url = item;
+                        if (url_items.next()) |item| title = std.mem.trim(u8, item, "\"");
+
+                        try output.appendSlice("<img src=\"");
+                        try output.appendSlice(url);
+                        try output.appendSlice("\" alt=\"");
+                        try output.appendSlice(alt);
+                        try output.appendSlice("\"");
+                        if (title.len > 0) {
                             try output.appendSlice(" title=\"");
                             try output.appendSlice(title);
                             try output.appendSlice("\"");
-
-                            idx = idx + cb + 1 + p + 1;
-                            try output.appendSlice("/>");
-                            continue;
-                        } else {
-                            try output.appendSlice("<img src=\"\" alt=\"");
-                            try output.appendSlice(text);
-                            try output.appendSlice("\"/>");
-                            idx = idx + cb + 1;
-                            continue;
                         }
+                        try output.appendSlice("/>");
+                        idx = after_bracket + p + 1;
+                        continue;
                     }
-                } else {
-                    try output.appendSlice("[");
-                    idx += 1;
-                    continue;
                 }
-            } else {
-                try output.append(current);
-                idx += 1;
-                continue;
             }
+            // If not a valid image, just output the '!' and continue
+            try output.append('!');
+            continue;
         }
 
+        // Bold (** or __)
         if (idx + 1 < line.len and (line[idx] == '*' or line[idx] == '_') and line[idx + 1] == line[idx]) {
             if (inBold == null) {
                 inBold = line[idx];
@@ -273,58 +255,47 @@ fn parseInline(allocator: std.mem.Allocator, line: string) !string {
                 try output.appendSlice("</strong>");
             } else {
                 try output.append(line[idx]);
-                idx += 1;
-                continue;
             }
             idx += 2;
             continue;
-        } else if (current == '*' or current == '_') {
+        }
+
+        // Italic (* or _)
+        if (current == '*' or current == '_') {
             if (inItalic == null) {
-                try output.appendSlice("<em>");
                 inItalic = current;
-                idx += 1;
-                continue;
+                try output.appendSlice("<em>");
             } else if (inItalic == current) {
-                try output.appendSlice("</em>");
                 inItalic = null;
-                idx += 1;
-                continue;
+                try output.appendSlice("</em>");
             } else {
-                try output.append(line[idx]);
-                idx += 1;
-                continue;
+                try output.append(current);
             }
-        } else if (current == '`') {
+            idx += 1;
+            continue;
+        }
+
+        // Inline code
+        if (current == '`') {
             if (inCode) {
                 try output.appendSlice("</code>");
                 inCode = false;
-                idx += 1;
-                continue;
             } else {
                 try output.appendSlice("<code>");
                 inCode = true;
-                idx += 1;
-                continue;
             }
-        } else {
-            try output.append(line[idx]);
             idx += 1;
+            continue;
         }
+
+        try output.append(current);
+        idx += 1;
     }
 
-    if (idx == line.len - 1 and (line[idx] != '*' and line[idx] != '_' and line[idx] != '`')) {
-        try output.append(line[idx]);
-    }
-
-    if (inCode) {
-        try output.appendSlice("</code>");
-    }
-    if (inBold != null) {
-        try output.appendSlice("</strong>");
-    }
-    if (inItalic != null) {
-        try output.appendSlice("</em>");
-    }
+    // Close any open tags
+    if (inCode) try output.appendSlice("</code>");
+    if (inBold != null) try output.appendSlice("</strong>");
+    if (inItalic != null) try output.appendSlice("</em>");
 
     return output.toOwnedSlice();
 }

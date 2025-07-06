@@ -425,8 +425,7 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
             }
 
             if (li_content) |content| {
-                const cleaned = try utils.htmlEscape(allocator, content);
-                try writeTag(allocator, new_file, "li", cleaned, &pending_id);
+                try writeTag(allocator, new_file, "li", content, &pending_id);
             }
             continue;
         } else {
