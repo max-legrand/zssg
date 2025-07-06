@@ -196,8 +196,7 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
                     try new_file.writeAll(line);
                     try new_file.writeAll("\n");
                     continue;
-                } else {
-                    // Multi-line HTML block
+                } else if (!std.mem.endsWith(u8, trimmed, "/>")) {
                     in_html_block = true;
                     html_tag = tag;
                     try new_file.writeAll(line);
@@ -205,6 +204,10 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
                     continue;
                 }
             }
+
+            try new_file.writeAll(line);
+            try new_file.writeAll("\n");
+            continue;
         }
 
         // Start of HTML block
