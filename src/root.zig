@@ -38,10 +38,15 @@ pub fn processFiles(allocator: std.mem.Allocator, md_files: []string) !void {
     }
 }
 
+const Asset = struct {
+    path: string,
+    save_inline: bool = false,
+};
+
 const Frontmatter = struct {
     title: ?string,
-    stylesheets: ?std.ArrayList(string) = null,
-    scripts: ?std.ArrayList(string) = null,
+    stylesheets: ?std.ArrayList(Asset) = null,
+    scripts: ?std.ArrayList(Asset) = null,
 };
 
 fn writeBase(allocator: std.mem.Allocator, file: *std.fs.File, frontmatter: Frontmatter) !void {
@@ -54,16 +59,36 @@ fn writeBase(allocator: std.mem.Allocator, file: *std.fs.File, frontmatter: Fron
     }
     if (frontmatter.stylesheets) |stylesheets| {
         for (stylesheets.items) |stylesheet| {
-            try file.writeAll("<link rel=\"stylesheet\" href=\"");
-            try file.writeAll(stylesheet);
-            try file.writeAll("\">\n");
+            if (stylesheet.save_inline) {
+                const asset_file = try std.fs.openFileAbsolute(stylesheet.path, .{});
+                defer asset_file.close();
+                const contents = asset_file.readToEndAlloc(allocator, std.math.maxInt(usize)) catch return;
+                defer allocator.free(contents);
+                try file.writeAll("<style>\n");
+                try file.writeAll(contents);
+                try file.writeAll("\n</style>\n");
+            } else {
+                try file.writeAll("<link rel=\"stylesheet\" href=\"");
+                try file.writeAll(stylesheet.path);
+                try file.writeAll("\">\n");
+            }
         }
     }
     if (frontmatter.scripts) |scripts| {
         for (scripts.items) |script| {
-            try file.writeAll("<script src=\"");
-            try file.writeAll(script);
-            try file.writeAll("\"></script>\n");
+            if (script.save_inline) {
+                const asset_file = try std.fs.openFileAbsolute(script.path, .{});
+                defer asset_file.close();
+                const contents = asset_file.readToEndAlloc(allocator, std.math.maxInt(usize)) catch return;
+                defer allocator.free(contents);
+                try file.writeAll("<script>\n");
+                try file.writeAll(contents);
+                try file.writeAll("\n</script>\n");
+            } else {
+                try file.writeAll("<script src=\"");
+                try file.writeAll(script.path);
+                try file.writeAll("\"></script>\n");
+            }
         }
     }
 
@@ -193,8 +218,8 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
         if (std.mem.eql(u8, trimmed, "---") and line_idx == 0) {
             var frontmatter = Frontmatter{
                 .title = null,
-                .stylesheets = std.ArrayList(string).init(allocator),
-                .scripts = std.ArrayList(string).init(allocator),
+                .stylesheets = std.ArrayList(Asset).init(allocator),
+                .scripts = std.ArrayList(Asset).init(allocator),
             };
             while (lines.peek()) |next_line| {
                 _ = lines.next();
@@ -212,27 +237,52 @@ fn processFile(allocator: std.mem.Allocator, md_file: string) !void {
                         frontmatter.title = try utils.htmlEscape(allocator, title);
                     } else if (std.mem.startsWith(u8, next_line, "stylesheet: ")) {
                         var stylesheet = next_line[12..next_line.len];
+                        var save_inline = false;
+                        if (std.mem.endsWith(u8, stylesheet, " - inline")) {
+                            save_inline = true;
+                            stylesheet = stylesheet[0 .. stylesheet.len - " - inline".len];
+                            stylesheet = std.mem.trimRight(u8, stylesheet, " \t");
+                        }
                         if (stylesheet[0] == '"' and stylesheet[stylesheet.len - 1] == '"') {
                             stylesheet = stylesheet[1 .. stylesheet.len - 1];
                         } else if (stylesheet[0] == '\'' and stylesheet[stylesheet.len - 1] == '\'') {
                             stylesheet = stylesheet[1 .. stylesheet.len - 1];
                         }
 
-                        if (!(std.mem.startsWith(u8, stylesheet, "http://") or std.mem.startsWith(u8, stylesheet, "https://"))) {
+                        if (!save_inline and !(std.mem.startsWith(u8, stylesheet, "http://") or std.mem.startsWith(u8, stylesheet, "https://"))) {
                             stylesheet = try std.fmt.allocPrint(allocator, "/{s}", .{stylesheet});
                         }
-                        try frontmatter.stylesheets.?.append(try utils.htmlEscape(allocator, stylesheet));
+
+                        if (save_inline) {
+                            stylesheet = md_dir.realpathAlloc(allocator, stylesheet) catch stylesheet;
+                        }
+                        try frontmatter.stylesheets.?.append(.{
+                            .path = try utils.htmlEscape(allocator, stylesheet),
+                            .save_inline = save_inline,
+                        });
                     } else if (std.mem.startsWith(u8, next_line, "js: ")) {
                         var js = next_line[4..];
+                        var save_inline = false;
+                        if (std.mem.endsWith(u8, js, " - inline")) {
+                            save_inline = true;
+                            js = js[0 .. js.len - " - inline".len];
+                            js = std.mem.trimRight(u8, js, " \t");
+                        }
                         if (js[0] == '"' and js[js.len - 1] == '"') {
                             js = js[1 .. js.len - 1];
                         } else if (js[0] == '\'' and js[js.len - 1] == '\'') {
                             js = js[1 .. js.len - 1];
                         }
-                        if (!(std.mem.startsWith(u8, js, "http://") or std.mem.startsWith(u8, js, "https://"))) {
+                        if (!save_inline and !(std.mem.startsWith(u8, js, "http://") or std.mem.startsWith(u8, js, "https://"))) {
                             js = try std.fmt.allocPrint(allocator, "/{s}", .{js});
                         }
-                        try frontmatter.scripts.?.append(try utils.htmlEscape(allocator, js));
+                        if (save_inline) {
+                            js = md_dir.realpathAlloc(allocator, js) catch js;
+                        }
+                        try frontmatter.scripts.?.append(.{
+                            .path = try utils.htmlEscape(allocator, js),
+                            .save_inline = save_inline,
+                        });
                     }
                     line_idx += 1;
                 }

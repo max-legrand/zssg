@@ -1,8 +1,8 @@
 ---
 title: "ZSSG test"
-stylesheet: "style.css"
+stylesheet: "style.css" - inline
 stylesheet: "https://fonts.googleapis.com/css2?family=Roboto"
-js: "script.js"
+js: "script.js" - inline
 ---
 
 # ZSSG - Zig Static Site Generator
