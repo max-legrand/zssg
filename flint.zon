@@ -1,0 +1,15 @@
+.{
+    .tasks = .{
+        .{
+            .name = "run",
+            .cmd = "./zig-out/bin/zssg",
+            .watcher = .{"md/*.md"},
+            .deps = .{"build"},
+        },
+        .{
+            .name = "build",
+            .cmd = "zig build",
+            .watcher = .{"**/*.zig"},
+        },
+    },
+}

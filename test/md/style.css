@@ -1,0 +1,210 @@
+:root {
+    --frame-radius: 10px;
+    --pink: #CDC1FF;
+    --bg: #000;
+    --bg-alt: #454057;
+    --fg: #dddddd;
+    --gray: #888888;
+    --green: #00ffaa;
+    --darkgreen: #00e699;
+    --yellow: #d6c5a5;
+    --string: #FFDCCC;
+    --red: #ed91b1;
+    --inlay: #e0d4ef;
+}
+
+html, body {
+    height: 100%;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "Fira Mono", "Consolas", "Menlo", "Monaco", "Liberation Mono", monospace;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+#viewport-frame {
+    margin: 1vw auto;
+    padding: 20px 20px;
+    border: 2px solid var(--pink);
+    border-radius: var(--frame-radius);
+    background: var(--bg);
+    max-width: 1100px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    box-shadow: 0 0 16px #cdc1ff22;
+    min-height: 0;
+}
+
+@media (max-width: 1200px) {
+    #viewport-frame {
+        max-width: 98vw;
+        margin: 2vw auto;
+        padding: 20px 20px;
+    }
+}
+
+@media (max-width: 700px) {
+    #viewport-frame {
+        max-width: 100vw;
+        margin: 0;
+        border-radius: 5px;
+        padding: 20px 10px;
+    }
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: inherit;
+    color: var(--pink);
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    font-weight: bold;
+    text-align: left;
+    width: 100%;
+}
+
+h1 {
+    font-size: 2.2em;
+    color: var(--pink);
+}
+
+h2 {
+    font-size: 1.5em;
+    color: var(--pink);
+}
+
+h3 {
+    font-size: 1.2em;
+    color: var(--green);
+}
+
+a {
+    color: var(--pink);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--pink);
+    transition: color 0.2s;
+    word-break: break-all;
+}
+a:hover {
+    color: var(--green);
+    border-bottom: 1px solid var(--green);
+}
+
+ul, ol {
+    margin: 1em 0 1.5em 1.5em;
+    padding-left: 1.5em;
+}
+
+li {
+    margin-bottom: 0.3em;
+}
+
+blockquote {
+    border-left: 3px solid var(--pink);
+    background: var(--bg-alt);
+    color: var(--inlay);
+    margin: 1.5em 0;
+    padding: 1em 2em;
+    font-style: italic;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    table-layout: fixed;
+    margin: 2em 0;
+    background: var(--bg-alt);
+    color: var(--fg);
+    box-shadow: 0 0 8px var(--pink)33;
+}
+
+th, td {
+    border: 1px solid var(--pink);
+    padding: 0.6em 1em;
+    text-align: left;
+    word-break: break-word;
+}
+
+th {
+    background: #2d1a4a;
+    color: var(--pink);
+}
+
+tr:nth-child(even) td {
+    background: var(--bg-alt);
+}
+
+img {
+    display: block;
+    margin: 2em auto 2em auto;
+    max-width: 95%;
+    height: 150px;
+    border: 2px solid var(--pink);
+    border-radius: 3px;
+    background: var(--bg-alt);
+    box-shadow: 0 0 8px var(--pink)33;
+    padding: 0.5em;
+}
+
+pre, code {
+    background: var(--bg-alt);
+    color: var(--green);
+    border-radius: 3px;
+    padding: 0.5em 0.8em;
+    font-family: inherit;
+    font-size: 1em;
+}
+
+pre {
+    overflow-x: auto;
+    margin: 1.5em 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+hr {
+    border: none;
+    border-top: 2px solid var(--pink);
+    margin: 2em 0;
+}
+
+#my-paragraph {
+    color: var(--green);
+    background: var(--bg-alt);
+    border-left: 3px solid var(--pink);
+    padding: 0.5em 1em;
+    margin: 1.5em 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#table-cell {
+    font-weight: bold;
+    color: var(--red);
+    background: var(--bg-alt);
+    border: 1px solid var(--pink);
+}
+
+footer, .footer {
+    text-align: center;
+    color: var(--pink);
+    margin-top: 2em;
+    font-size: 1.1em;
+    opacity: 0.8;
+    width: 100%;
+}
+
+.myclass {
+    align-self: center;
+}
+
+.span {
+    font-weight: bold;
+    font-family: "Roboto", sans-serif;
+}
